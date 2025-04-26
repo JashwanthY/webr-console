@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🧬 WebR Console - Powered by WebAssembly</title>
+</head>
+<body style="font-family: sans-serif; padding: 20px; background-color: #f7f9fc;">
+
+  <h1>🧬 WebR Console</h1>
+  <p>Type your R code below and click Run!</p>
+
+  <div style="background-color: #000; color: #0f0; padding: 10px; height: 300px; overflow-y: auto; border-radius: 8px;" id="output">
+    Loading webR, please wait...
+  </div>
+
+  <input id="input" type="text" placeholder="Type R command..." style="width: 70%; padding: 10px; font-size: 16px; margin-top: 10px; border-radius: 6px; border: 1px solid #ccc;">
+  <button onclick="sendInput()" style="padding: 10px 20px; font-size: 16px; border-radius: 6px; background-color: #4CAF50; color: white; margin-left: 10px;">Run</button>
+
+  <script type="module">
+    import { WebR, Console } from 'https://webr.r-wasm.org/latest/webr.mjs';
+
+    async function startWebR() {
+      const webR = new WebR({
+        channelType: WebR.ChannelType.PostMessage
+      });
+      await webR.init();
+
+      const webRConsole = new Console({
+        webR,
+        stdout: line => document.getElementById('output').append(line + '\\n'),
+        stderr: line => document.getElementById('output').append(line + '\\n'),
+        prompt: p => document.getElementById('output').append(p)
+      });
+
+      await webRConsole.run();
+      window.webRConsole = webRConsole;
+    }
+
+    function sendInput() {
+      const inputElem = document.getElementById('input');
+      const outputElem = document.getElementById('output');
+      if (window.webRConsole) {
+        window.webRConsole.stdin(inputElem.value);
+        outputElem.append(inputElem.value + '\\n');
+        inputElem.value = "";
+      }
+    }
+
+    startWebR();
+  </script>
+
+</body>
+</html>

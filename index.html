@@ -17,37 +17,38 @@
   <button onclick="sendInput()" style="padding: 10px 20px; font-size: 16px; border-radius: 6px; background-color: #4CAF50; color: white; margin-left: 10px;">Run</button>
 
   <script type="module">
-    import { WebR, Console } from 'https://webr.r-wasm.org/latest/webr.mjs';
+  import { WebR, Console, ChannelType } from 'https://webr.r-wasm.org/latest/webr.mjs';
 
-    async function startWebR() {
-      const webR = new WebR({
-        channelType: WebR.ChannelType.PostMessage
-      });
-      await webR.init();
+  async function startWebR() {
+    const webR = new WebR({
+      channelType: ChannelType.PostMessage   <!-- 👈 IMPORTANT: Force PostMessage mode -->
+    });
+    await webR.init();
 
-      const webRConsole = new Console({
-        webR,
-        stdout: line => document.getElementById('output').append(line + '\\n'),
-        stderr: line => document.getElementById('output').append(line + '\\n'),
-        prompt: p => document.getElementById('output').append(p)
-      });
+    const webRConsole = new Console({
+      webR,
+      stdout: line => document.getElementById('output').append(line + '\\n'),
+      stderr: line => document.getElementById('output').append(line + '\\n'),
+      prompt: p => document.getElementById('output').append(p)
+    });
 
-      await webRConsole.run();
-      window.webRConsole = webRConsole;
+    window.webRConsole = webRConsole;
+    await webRConsole.run();
+  }
+
+  function sendInput() {
+    const inputElem = document.getElementById('input');
+    const outputElem = document.getElementById('output');
+    if (window.webRConsole) {
+      window.webRConsole.stdin(inputElem.value);
+      outputElem.append(inputElem.value + '\\n');
+      inputElem.value = "";
     }
+  }
 
-    function sendInput() {
-      const inputElem = document.getElementById('input');
-      const outputElem = document.getElementById('output');
-      if (window.webRConsole) {
-        window.webRConsole.stdin(inputElem.value);
-        outputElem.append(inputElem.value + '\\n');
-        inputElem.value = "";
-      }
-    }
+  startWebR();
+</script>
 
-    startWebR();
-  </script>
 
 </body>
 </html>

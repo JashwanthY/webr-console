@@ -2,53 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>🧬 WebR Console - Powered by WebAssembly</title>
+  <title>🧬 WebR Console</title>
 </head>
 <body style="font-family: sans-serif; padding: 20px; background-color: #f7f9fc;">
 
   <h1>🧬 WebR Console</h1>
   <p>Type your R code below and click Run!</p>
 
-  <div style="background-color: #000; color: #0f0; padding: 10px; height: 300px; overflow-y: auto; border-radius: 8px;" id="output">
+  <!-- Console Output -->
+  <div id="output"
+       style="background: black; color: lime; padding: 10px; height: 300px;
+              overflow-y: auto; border-radius: 8px; white-space: pre-wrap;">
     Loading webR, please wait...
   </div>
 
-  <input id="input" type="text" placeholder="Type R command..." style="width: 70%; padding: 10px; font-size: 16px; margin-top: 10px; border-radius: 6px; border: 1px solid #ccc;">
-  <button onclick="sendInput()" style="padding: 10px 20px; font-size: 16px; border-radius: 6px; background-color: #4CAF50; color: white; margin-left: 10px;">Run</button>
+  <!-- Input & Button -->
+  <div style="margin-top: 10px;">
+    <input id="input" type="text" placeholder="Type R command..."
+           style="width: 70%; padding: 10px; font-size: 16px;
+                  border: 1px solid #ccc; border-radius: 6px;">
+    <button id="run-btn"
+            style="padding: 10px 20px; font-size: 16px;
+                   background: #4CAF50; color: white; border: none;
+                   border-radius: 6px; margin-left: 10px;"
+            disabled>
+      Run
+    </button>
+  </div>
 
-  <script type="module">
-  import { WebR, Console, ChannelType } from 'https://webr.r-wasm.org/latest/webr.mjs';
+  <!-- Placeholder for plot canvas (we'll fill this in next) -->
+  <canvas id="plot-canvas"
+  width="1008" height="1008" 
+  style="margin-top: 20px; border: 1px solid #ccc; display: none; width: 500px; height: 500px;">
+</canvas>
 
-  async function startWebR() {
-    const webR = new WebR({
-      channelType: ChannelType.PostMessage   <!-- 👈 IMPORTANT: Force PostMessage mode -->
-    });
-    await webR.init();
 
-    const webRConsole = new Console({
-      webR,
-      stdout: line => document.getElementById('output').append(line + '\\n'),
-      stderr: line => document.getElementById('output').append(line + '\\n'),
-      prompt: p => document.getElementById('output').append(p)
-    });
-
-    window.webRConsole = webRConsole;
-    await webRConsole.run();
-  }
-
-  function sendInput() {
-    const inputElem = document.getElementById('input');
+<script type="module">
+    import { WebR, ChannelType } from 'https://webr.r-wasm.org/latest/webr.mjs';
+  
+    let webR, shelter;
     const outputElem = document.getElementById('output');
-    if (window.webRConsole) {
-      window.webRConsole.stdin(inputElem.value);
-      outputElem.append(inputElem.value + '\\n');
-      inputElem.value = "";
+    const inputElem  = document.getElementById('input');
+    const runBtn     = document.getElementById('run-btn');
+    const plotCanvas = document.getElementById('plot-canvas');
+    const ctx        = plotCanvas.getContext('2d');
+  
+    async function startWebR() {
+      webR = new WebR({ channelType: ChannelType.PostMessage });
+      await webR.init();
+      shelter = await new webR.Shelter();
+  
+      // Set default plotting device
+      await webR.evalRVoid('options(device=webr::canvas)');
+  
+      outputElem.innerText = '✅ WebR loaded! Ready.\n> ';
+      runBtn.disabled = false;
+  
+      // Start listening for plot messages
+      handlePlotMessages();
+    }
+  
+    async function handlePlotMessages() {
+  for (;;) {
+    const msg = await webR.read();
+    if (msg.type === 'canvas') {
+      if (msg.data.event === 'canvasNewPage') {
+        // Create a fresh canvas or clear existing
+        plotCanvas.style.display = 'block';  // 🛠️ Make sure it becomes visible
+        ctx.clearRect(0, 0, plotCanvas.width, plotCanvas.height);  // 🛠️ Clear old content
+      } else if (msg.data.event === 'canvasImage') {
+        ctx.drawImage(msg.data.image, 0, 0);  // 🛠️ Draw the plot
+      }
+    }
+  }
+}
+
+  
+async function sendInput() {
+  const code = inputElem.value.trim();
+  if (!code) return;
+  outputElem.innerText += "\n" + code + "\n";
+  inputElem.value = "";
+
+  // 1️⃣ Tell WebR to capture graphics too!
+  const wrappedCode = `withVisible({ ${code} })`;
+  const result = await shelter.captureR(wrappedCode, { captureGraphics: true });
+
+  // 2️⃣ Show any stdout
+  for (const msg of result.output) {
+    if (msg.type === "stdout") {
+      outputElem.innerText += msg.data;
     }
   }
 
-  startWebR();
-</script>
+  // 3️⃣ Draw any plots if present
+  if (result.images && result.images.length > 0) {
+    plotCanvas.style.display = 'block';
+    ctx.clearRect(0, 0, plotCanvas.width, plotCanvas.height);
+    ctx.drawImage(result.images[0], 0, 0);
+  }
 
+  // 4️⃣ If it had a visible result, print it
+  if (result.result?.visible) {
+    const printed = await shelter.captureR(`print(${code})`);
+    for (const msg of printed.output) {
+      if (msg.type === "stdout") {
+        outputElem.innerText += msg.data;
+      }
+    }
+  }
+
+  outputElem.innerText += "\n> ";
+  outputElem.scrollTop = outputElem.scrollHeight;
+}
+
+    runBtn.addEventListener('click', sendInput);
+  
+    startWebR();
+  </script>
+  
 
 </body>
 </html>
